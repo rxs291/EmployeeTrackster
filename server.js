@@ -1,7 +1,9 @@
 const inquirer = require("inquirer");
 const mysql = require("mysql2/promise");
 
+//using ASYNC function to wrap entire function to allow for AWAITS to be used
 async function main() {
+  ////everything waits for connection to be established
   const db = await mysql.createConnection(
     {
       host: "localhost",
@@ -11,7 +13,7 @@ async function main() {
     },
     console.log(`Connected to the workForce_db database.`)
   );
-
+  ///// MENU function defined first, called at the bottom of MAIN function
   async function mainMenu() {
     let menuChoice;
     await inquirer
@@ -26,6 +28,10 @@ async function main() {
             "Update Employee",
             "View All Roles",
             "Add Role",
+            "View All Departments",
+            "Add Department",
+            "View Employees by Manager",
+            "View Employees by Department",
             "Quit",
           ],
         },
@@ -33,7 +39,7 @@ async function main() {
       .then((response) => {
         menuChoice = response.choice1;
       });
-
+    ///switch statement OUTSIDE of inquere prompt, to ensure only ONE inquirer prompt is running at any given time
     switch (menuChoice) {
       case "View All Employees":
         viewAllEmployees();
@@ -49,6 +55,17 @@ async function main() {
         break;
       case "Add Role":
         addRole();
+      case "View All Departments":
+        viewAllDepartments();
+        break;
+      case "Add Department":
+        addDepartment();
+        break;
+      case "View Employees by Manager":
+        viewEmployeesByManager();
+        break;
+      case "View Employees by Department":
+        viewEmployeesByDepartment();
         break;
       case "Quit":
         process.exit();
@@ -57,10 +74,10 @@ async function main() {
         console.log("Please select an option:");
     }
   }
-
+  ////all functions defined in squential order according to list-order in the menu, starting with viewAllemployees
   async function viewAllEmployees() {
     let results = await db.query(
-      "SELECT employee.id, employee.first_name, employee.last_name, role.title, department.name, role.salary, employee.manager_id FROM employee LEFT JOIN role ON employee.role_id = role.id LEFT JOIN department ON role.department_id = department.id "
+      "SELECT employee.id, employee.first_name, employee.last_name, role.title, department.name, role.salary, employee.manager_id,    FROM employee LEFT JOIN role ON employee.role_id = role.id LEFT JOIN department ON role.department_id = department.id "
     );
     console.table("\n");
     console.table(results[0]);
@@ -102,10 +119,10 @@ async function main() {
           type: "list",
           message: "Who is there manager:",
           name: "manager",
-          choices: managers[0].map((employee) => {
+          choices: managers[0].map((manager) => {
             return {
-              name: `${employee.first_name} ${employee.last_name}`,
-              value: employee.id,
+              name: `${manager.first_name} ${manager.last_name}`,
+              value: manager.id,
             };
           }),
         },
@@ -218,59 +235,100 @@ async function main() {
     mainMenu();
   }
 
+  async function viewAllDepartments() {
+    let results = await db.query("SELECT id, name  FROM department");
+    console.table("\n");
+    console.table(results[0]);
+    mainMenu();
+  }
 
+  async function addDepartment() {
+    var answers;
 
+    await inquirer
+      .prompt([
+        {
+          type: "input",
+          message: "What is the name of the new department:",
+          name: "name",
+        },
+      ])
+      .then((response) => {
+        answers = response;
+      });
 
-  
+    await db.query(`INSERT INTO department (name) VALUES ("${answers.name}")`);
+
+    console.log("\n-----DEPARTMENT ADDED TO DATABASE-----\n");
+
+    mainMenu();
+  }
+
+  async function viewEmployeesByManager() {
+    const managers = await db.query(
+      "SELECT first_name, last_name, id FROM employee WHERE manager_id IS null"
+    );
+    var answers;
+
+    await inquirer
+      .prompt([
+        {
+          type: "list",
+          message: "Who's employees would you like to see:",
+          name: "manager",
+          choices: managers[0].map((manager) => {
+            return {
+              name: `${manager.first_name} ${manager.last_name}`,
+              value: manager.id,
+            };
+          }),
+        },
+      ])
+      .then((response) => {
+        answers = response;
+      });
+
+    let results = await db.query(
+      `SELECT first_name, last_name, title, name FROM employee LEFT JOIN role ON employee.role_id = role.id LEFT JOIN department ON role.department_id = department.id WHERE manager_id = ${answers.manager}`
+    );
+
+    console.table(results[0]);
+
+    mainMenu();
+  }
+
+  async function viewEmployeesByDepartment() {
+    const dept = await db.query("SELECT name, id FROM department");
+    var answers;
+
+    await inquirer
+      .prompt([
+        {
+          type: "list",
+          message: "Which department employees would you like to see:",
+          name: "dept",
+          choices: dept[0].map((dept) => {
+            return {
+              name: `${dept.name}`,
+              value: dept.id,
+            };
+          }),
+        },
+      ])
+      .then((response) => {
+        answers = response;
+      });
+
+    let results = await db.query(
+      `SELECT first_name, last_name, title, name FROM employee LEFT JOIN role ON employee.role_id = role.id LEFT JOIN department ON role.department_id = department.id WHERE department.id = ${answers.dept}`
+    );
+
+    console.table(results[0]);
+
+    mainMenu();
+  }
 
   mainMenu();
 }
 
 main();
-
-// async function mainMenu () {
-//   .prompt([
-//     {
-//       type: "list",
-//       message: "What would you like to do?",
-//       name: "choice",
-//       choices:
-//       {
-//         "Add Employee", "Update EmployeeRole"
-//       }
-
-//     },
-//   ])
-
-// }
-
-// const results = await db.query("SELECT * FROM employee");
-// console.log(
-//   results[0].map(
-//     (employee) =>
-//       `${employee.id} ${employee.first_name} ${employee.last_name}`
-//   )
-// );
-// const response1 = await inquirer
-// .prompt([
-//   {
-//     type: "list",
-//     message: "Choose from this list?",
-//     name: "choice1",
-//     choices: results[0].map(
-//       (employee) =>
-//         `${employee.id} ${employee.first_name} ${employee.last_name}`
-//     ),
-//   },
-// ])
-
-// const response2 = await inquirer
-// .prompt([
-//   {
-//     type: "boolean",
-//     message: `Is this who you chose, ${response1.choice1} ?`,
-//     name: "choice1",
-//   },
-// ])
-
-// console.log(response2)
