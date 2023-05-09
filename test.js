@@ -15,9 +15,9 @@ const db = await mysql.createConnection(
   );
 
 
-  const managers = await db.query("SELECT first_name, last_name, id FROM employee WHERE manager_id IS null")
+  let results = await db.query("SELECT employee.id, employee.first_name, employee.last_name, role.title, department.name, role.salary, employee.manager_id FROM employee LEFT JOIN role ON employee.role_id = role.id LEFT JOIN department ON role.department_id = department.id ");
 
-  console.log(managers[0])
+  console.table(results[0])
 
 
 // console.log(roles[0].map((employee) =>

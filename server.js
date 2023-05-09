@@ -1,5 +1,5 @@
 const inquirer = require("inquirer");
-const mysql = require("mysql2/promise"); 
+const mysql = require("mysql2/promise");
 
 async function main() {
   const db = await mysql.createConnection(
@@ -20,7 +20,14 @@ async function main() {
           type: "list",
           message: "Please select an option:",
           name: "choice1",
-          choices: ["View all Employees", "Add Employee", "Quit"],
+          choices: [
+            "View All Employees",
+            "Add Employee",
+            "Update Employee",
+            "View All Roles",
+            "Add Role",
+            "Quit",
+          ],
         },
       ])
       .then((response) => {
@@ -28,11 +35,20 @@ async function main() {
       });
 
     switch (menuChoice) {
-      case "View all Employees":
+      case "View All Employees":
         viewAllEmployees();
         break;
       case "Add Employee":
         addEmployee();
+        break;
+      case "Update Employee":
+        updateEmployee();
+        break;
+      case "View All Roles":
+        viewAllRoles();
+        break;
+      case "Add Role":
+        addRole();
         break;
       case "Quit":
         process.exit();
@@ -43,7 +59,9 @@ async function main() {
   }
 
   async function viewAllEmployees() {
-    let results = await db.query("SELECT * FROM employee");
+    let results = await db.query(
+      "SELECT employee.id, employee.first_name, employee.last_name, role.title, department.name, role.salary, employee.manager_id FROM employee LEFT JOIN role ON employee.role_id = role.id LEFT JOIN department ON role.department_id = department.id "
+    );
     console.table("\n");
     console.table(results[0]);
     mainMenu();
@@ -105,7 +123,106 @@ async function main() {
     mainMenu();
   }
 
-  // process.exit();
+  async function updateEmployee() {
+    let employeeList = await db.query("SELECT * FROM employee");
+    let employeeTraits = await db.query("Describe employee");
+    let answers;
+
+    await inquirer
+      .prompt([
+        {
+          type: "list",
+          message: "Choose an employee to update:",
+          name: "employee",
+          choices: employeeList[0].map((employee) => {
+            return {
+              name: `${employee.first_name} ${employee.last_name}`,
+              value: employee.id,
+            };
+          }),
+        },
+        {
+          type: "list",
+          message: "Choose what to update:",
+          name: "trait",
+          choices: employeeTraits[0].map((trait) => `${trait.Field}`),
+        },
+        {
+          type: "input",
+          message: "What would you like to update it with:",
+          name: "update",
+        },
+      ])
+      .then((response) => {
+        answers = response;
+      });
+
+    await db.query(
+      `UPDATE employee SET ${answers.trait} = "${answers.update}" WHERE id = ${answers.employee}`
+    );
+
+    console.log("\n-----EMPLOYEE ADDED TO DATABASE-----\n");
+
+    mainMenu();
+  }
+
+  async function viewAllRoles() {
+    let results = await db.query(
+      "SELECT role.id, role.title, department.name, role.salary FROM role LEFT JOIN department ON role.department_id = department.id"
+    );
+    console.table("\n");
+    console.table(results[0]);
+    mainMenu();
+  }
+
+  async function addRole() {
+    const departmentNames = await db.query("SELECT name, id FROM department");
+    var answers;
+
+    await inquirer
+      .prompt([
+        {
+          type: "input",
+          message: "What is the name of the role:",
+          name: "name",
+        },
+        {
+          type: "input",
+          message: "What is the salary of the role:",
+          name: "salary",
+        },
+        {
+          type: "list",
+          message: "Which department does the role belong to:",
+          name: "dept_id",
+          choices: departmentNames[0].map((dept) => {
+            return {
+              name: `${dept.name}`,
+              value: dept.id,
+            };
+          }),
+        },
+      ])
+      .then((response) => {
+        answers = response;
+      });
+
+    console.log(answers);
+
+    await db.query(
+      `INSERT INTO role (title, salary, department_id) VALUES ("${answers.name}", "${answers.salary}", ${answers.dept_id})`
+    );
+
+    console.log("\n-----ROLE ADDED TO DATABASE-----\n");
+
+    mainMenu();
+  }
+
+
+
+
+  
+
   mainMenu();
 }
 
