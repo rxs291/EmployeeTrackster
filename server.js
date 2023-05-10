@@ -25,13 +25,16 @@ async function main() {
           choices: [
             "View All Employees",
             "Add Employee",
-            "Update Employee",
+            "Update Employee Role",
             "View All Roles",
             "Add Role",
             "View All Departments",
             "Add Department",
+            "Update Employee Manager",
             "View Employees by Manager",
             "View Employees by Department",
+            "Delete Deptartment, Role, or Employee",
+            "Department Budget",
             "Quit",
           ],
         },
@@ -47,19 +50,23 @@ async function main() {
       case "Add Employee":
         addEmployee();
         break;
-      case "Update Employee":
-        updateEmployee();
+      case "Update Employee Role":
+        updateEmployeeRole();
         break;
       case "View All Roles":
         viewAllRoles();
         break;
       case "Add Role":
         addRole();
+        break;
       case "View All Departments":
         viewAllDepartments();
         break;
       case "Add Department":
         addDepartment();
+        break;
+      case "Update Employee Manager":
+        updateEmployeeManager();
         break;
       case "View Employees by Manager":
         viewEmployeesByManager();
@@ -67,9 +74,14 @@ async function main() {
       case "View Employees by Department":
         viewEmployeesByDepartment();
         break;
+      case "Delete Deptartment, Role, or Employee":
+        deleteRowFromTable();
+        break;
+      case "Department Budget":
+        departmentBudget();
+        break;
       case "Quit":
         process.exit();
-        break;
       default:
         console.log("Please select an option:");
     }
@@ -77,9 +89,9 @@ async function main() {
   ////all functions defined in squential order according to list-order in the menu, starting with viewAllemployees
   async function viewAllEmployees() {
     let results = await db.query(
-      "SELECT employee.id, employee.first_name, employee.last_name, role.title, department.name, role.salary, employee.manager_id,    FROM employee LEFT JOIN role ON employee.role_id = role.id LEFT JOIN department ON role.department_id = department.id "
+      "SELECT employee.id, employee.first_name, employee.last_name, role.title, department.name AS department, role.salary, CONCAT(manager.first_name, ' ', manager.last_name) AS manager FROM employee LEFT JOIN role on employee.role_id = role.id LEFT JOIN department on role.department_id = department.id LEFT JOIN employee manager on manager.id = employee.manager_id"
     );
-    console.table("\n");
+
     console.table(results[0]);
     mainMenu();
   }
@@ -140,16 +152,16 @@ async function main() {
     mainMenu();
   }
 
-  async function updateEmployee() {
+  async function updateEmployeeRole() {
     let employeeList = await db.query("SELECT * FROM employee");
-    let employeeTraits = await db.query("Describe employee");
+    let employeeRoles = await db.query("SELECT title, id FROM role");
     let answers;
 
     await inquirer
       .prompt([
         {
           type: "list",
-          message: "Choose an employee to update:",
+          message: "Choose an employee to update their role:",
           name: "employee",
           choices: employeeList[0].map((employee) => {
             return {
@@ -160,14 +172,14 @@ async function main() {
         },
         {
           type: "list",
-          message: "Choose what to update:",
-          name: "trait",
-          choices: employeeTraits[0].map((trait) => `${trait.Field}`),
-        },
-        {
-          type: "input",
-          message: "What would you like to update it with:",
-          name: "update",
+          message: "Choose a role to give them:",
+          name: "roleID",
+          choices: employeeRoles[0].map((employeeRoles) => {
+            return {
+              name: `${employeeRoles.title}`,
+              value: employeeRoles.id,
+            };
+          }),
         },
       ])
       .then((response) => {
@@ -175,19 +187,18 @@ async function main() {
       });
 
     await db.query(
-      `UPDATE employee SET ${answers.trait} = "${answers.update}" WHERE id = ${answers.employee}`
+      `UPDATE employee SET role_id = ${answers.roleID} WHERE id = ${answers.employee}`
     );
 
-    console.log("\n-----EMPLOYEE ADDED TO DATABASE-----\n");
+    console.log("\n-----UPDATE ADDED TO DATABASE-----\n");
 
     mainMenu();
   }
 
   async function viewAllRoles() {
     let results = await db.query(
-      "SELECT role.id, role.title, department.name, role.salary FROM role LEFT JOIN department ON role.department_id = department.id"
+      "SELECT role.id, role.title, department.name AS department, role.salary FROM role LEFT JOIN department ON role.department_id = department.id"
     );
-    console.table("\n");
     console.table(results[0]);
     mainMenu();
   }
@@ -224,8 +235,6 @@ async function main() {
         answers = response;
       });
 
-    console.log(answers);
-
     await db.query(
       `INSERT INTO role (title, salary, department_id) VALUES ("${answers.name}", "${answers.salary}", ${answers.dept_id})`
     );
@@ -236,8 +245,9 @@ async function main() {
   }
 
   async function viewAllDepartments() {
-    let results = await db.query("SELECT id, name  FROM department");
-    console.table("\n");
+    let results = await db.query(
+      "SELECT id, name AS department FROM department"
+    );
     console.table(results[0]);
     mainMenu();
   }
@@ -324,6 +334,197 @@ async function main() {
     );
 
     console.table(results[0]);
+
+    mainMenu();
+  }
+
+  async function updateEmployeeManager() {
+    let employeeList = await db.query("SELECT * FROM employee");
+    let answers1;
+    let answers2;
+
+    await inquirer
+      .prompt([
+        {
+          type: "list",
+          message: "Choose an employee to update their manager:",
+          name: "employee",
+          choices: employeeList[0].map((employee) => {
+            return {
+              name: `${employee.first_name} ${employee.last_name}`,
+              value: employee.id,
+            };
+          }),
+        },
+        {
+          type: "confirm",
+          message: "Are they being promoted to manager?",
+          name: "management",
+        },
+      ])
+      .then((response) => {
+        answers1 = response;
+      });
+
+    if (!answers1.management) {
+      let managerInfo = await db.query(
+        "SELECT employee.id, CONCAT(employee.first_name, ' ', employee.last_name) AS manager FROM employee WHERE employee.manager_id IS NULL"
+      );
+      await inquirer
+        .prompt([
+          {
+            type: "list",
+            message: "Please choose a manager to give them:",
+            name: "managerID",
+            choices: managerInfo[0].map((managerInfo) => {
+              return {
+                name: `${managerInfo.manager}`,
+                value: managerInfo.id,
+              };
+            }),
+          },
+        ])
+        .then((response) => {
+          answers2 = response;
+        });
+    } else {
+      await db.query(
+        `UPDATE employee SET manager_id = null WHERE id = ${answers1.employee}`
+      );
+      console.log("\n-----UPDATE ADDED TO DATABASE-----\n");
+      return mainMenu();
+    }
+
+    await db.query(
+      `UPDATE employee SET manager_id = ${answers2.managerID} WHERE id = ${answers1.employee}`
+    );
+
+    console.log("\n-----UPDATE ADDED TO DATABASE-----\n");
+
+    mainMenu();
+  }
+
+  async function deleteRowFromTable() {
+    let answers1;
+    let answers2;
+
+    await inquirer
+      .prompt([
+        {
+          type: "list",
+          message: "What would you like to delete:",
+          name: "choice1",
+          choices: ["department", "role", "employee"],
+        },
+      ])
+      .then((response) => {
+        answers1 = response;
+      });
+
+    if (answers1.choice1 === "department") {
+      let departments = await db.query(
+        "SELECT id, name AS department from department"
+      );
+      await inquirer
+        .prompt([
+          {
+            type: "list",
+            message: "Please choose a department to delete:",
+            name: "choice2",
+            choices: departments[0].map((department) => {
+              return {
+                name: `${department.department}`,
+                value: department.id,
+              };
+            }),
+          },
+        ])
+        .then((response) => {
+          answers2 = response;
+        });
+    } else if (answers1.choice1 === "role") {
+      let roles = await db.query("SELECT id, title FROM role");
+      await inquirer
+        .prompt([
+          {
+            type: "list",
+            message: "Please choose a role to delete:",
+            name: "choice2",
+            choices: roles[0].map((role) => {
+              return {
+                name: `${role.title}`,
+                value: role.id,
+              };
+            }),
+          },
+        ])
+        .then((response) => {
+          answers2 = response;
+        });
+    } else {
+      let employees = await db.query(
+        "SELECT employee.id, CONCAT(employee.first_name, ' ', employee.last_name) AS employee FROM employee"
+      );
+      await inquirer
+        .prompt([
+          {
+            type: "list",
+            message: "Please choose a employee to delete:",
+            name: "choice2",
+            choices: employees[0].map((employee) => {
+              return {
+                name: `${employee.employee}`,
+                value: employee.id,
+              };
+            }),
+          },
+        ])
+        .then((response) => {
+          answers2 = response;
+        });
+    }
+
+    await db.query(
+      `DELETE FROM ${answers1.choice1} WHERE id =  ${answers2.choice2}`
+    );
+
+    console.log(`\n-----${answers1.choice1} deleted from database.-----\n`);
+
+    mainMenu();
+  }
+
+  async function departmentBudget() {
+    let departments = await db.query(
+      "SELECT id, name AS department FROM department"
+    );
+    let answer;
+
+    await inquirer
+      .prompt([
+        {
+          type: "list",
+          message: "Choose a deparment to see their budget:",
+          name: "choice",
+          choices: departments[0].map((department) => {
+            return {
+              name: `${department.department}`,
+              value: {
+                name: department.department,
+                id: department.id,
+              },
+            };
+          }),
+        },
+      ])
+      .then((response) => {
+        answer = response;
+      });
+
+    let total_salary = await db.query(
+      `SELECT SUM(role.salary) AS ${answer.choice.name}_salary FROM employee JOIN role ON employee.role_id = role.id JOIN department ON role.department_id = department.id WHERE department.id = ${answer.choice.id}`
+    );
+
+    console.table(total_salary[0]);
 
     mainMenu();
   }
